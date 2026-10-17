@@ -1,0 +1,15 @@
+# Build output
+build/
+out/
+
+# IDE files
+.vs/
+.vscode/
+*.user
+
+# vcpkg (manifest mode installs libraries here)
+vcpkg_installed/
+
+# Large market data files (keep small samples only)
+data/*.csv
+!data/sample_*.csv

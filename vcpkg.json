@@ -1,0 +1,9 @@
+{
+  "name": "order-book",
+  "version": "0.1.0",
+  "dependencies": [
+    "gtest",
+    "benchmark"
+  ],
+  "builtin-baseline": "a5f736224e85b32e25a8ffc52562333180396642"
+}

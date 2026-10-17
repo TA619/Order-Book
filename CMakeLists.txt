@@ -29,7 +29,10 @@ set_project_warnings(orderbook_app)
 enable_testing()
 find_package(GTest CONFIG REQUIRED)
 
-add_executable(tests tests/sanity_test.cpp)
+add_executable(tests
+    tests/sanity_test.cpp
+    tests/types_test.cpp
+)
 target_link_libraries(tests PRIVATE orderbook GTest::gtest_main)
 set_project_warnings(tests)
 

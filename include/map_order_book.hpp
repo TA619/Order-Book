@@ -29,6 +29,10 @@ public:
     // Prints the top `depth` levels of each side (see map_order_book.cpp).
     void printBook(std::ostream& os, std::size_t depth = 5) const;
 
+    // Copy of the orders resting at one price level, front (oldest) first.
+    // Empty if the level doesn't exist. For tests; not on the hot path.
+    [[nodiscard]] std::vector<Order> levelOrders(Side s, Price px) const;
+
 private:
     using Level = std::list<Order>;
 

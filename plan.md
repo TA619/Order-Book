@@ -218,7 +218,7 @@ Map-based internals:
 - 🌐 GoogleTest and Google Benchmark GitHub READMEs
 
 ## 9. Progress checklist
-- [ ] Week 1 — basic book
+- [x] Week 1 — basic book
 - [ ] Week 2 — matching engine
 - [ ] Week 3 — real data replay
 - [ ] Week 4 — benchmarks + README + GitHub

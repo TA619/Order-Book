@@ -33,6 +33,7 @@ add_executable(tests
     tests/sanity_test.cpp
     tests/types_test.cpp
     tests/order_book_tests.cpp
+    tests/matching_tests.cpp
 )
 target_link_libraries(tests PRIVATE orderbook GTest::gtest_main)
 set_project_warnings(tests)

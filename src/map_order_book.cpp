@@ -16,6 +16,18 @@ std::vector<Trade> MapOrderBook::addLimit(Order o) {
 
     o.ts = nextTs_++;
 
+    // 1. Aggressive part: trade against the opposite side while prices cross.
+    std::vector<Trade> trades;
+    if (o.side == Side::Buy) {
+        matchAgainst(o, asks_, trades);
+    } else {
+        matchAgainst(o, bids_, trades);
+    }
+    if (o.qty == 0) {
+        return trades;  // fully filled, nothing left to rest
+    }
+
+    // 2. Passive part: rest whatever is left on our own side.
     // One map lookup per insert: operator[] finds or creates the level, and
     // we keep a reference to it instead of looking it up again.
     if (o.side == Side::Buy) {
@@ -28,8 +40,131 @@ std::vector<Trade> MapOrderBook::addLimit(Order o) {
         index_[o.id] = {Side::Sell, o.price, std::prev(level.end())};
     }
 
-    // No matching yet (Week 2), so an insert never trades.
-    return {};
+    return trades;
+}
+
+/*
+=============================================================================
+ Week 2 Day 1 Problem: The Matching Loop                Difficulty: Medium
+=============================================================================
+
+ Implement matchAgainst(taker, opposite, trades).
+
+ `taker`    : the incoming order (already validated, ts already set).
+ `opposite` : the map on the OTHER side -- asks_ if taker is a Buy,
+              bids_ if taker is a Sell. Its begin() is always the best
+              price for the taker (that's why bids_ uses std::greater).
+ `trades`   : append one Trade per fill.
+
+ Rules (price-time priority):
+   1. Look at the best opposite level (opposite.begin()).
+   2. It CROSSES if:  taker is Buy  and level price <= taker.price
+                      taker is Sell and level price >= taker.price
+      If it doesn't cross (or opposite is empty), stop.
+   3. Fill against the FRONT order of that level (oldest first):
+        fill = min(taker.qty, resting.qty)
+        Trade price = the RESTING order's price (not the taker's!)
+        Trade buyId / sellId: whichever of taker/resting is Buy / Sell.
+      Subtract fill from both quantities.
+   4. If the resting order hit qty 0: erase it from the level AND from
+      index_. If the level is now empty: erase the level from `opposite`.
+   5. Repeat until taker.qty == 0 or nothing crosses.
+
+ addLimit (already written) calls this first, then rests whatever qty is
+ left on the taker's own side.
+
+-----------------------------------------------------------------------------
+ Example 1:  (full fill, one resting order)
+   asks: 101 -> [#1 qty=5]
+   taker: Buy #9 px=101 qty=5
+   trades = [{buy=9, sell=1, px=101, qty=5}]
+   book after: asks empty, bids empty
+
+ Example 2:  (price improvement: trade at RESTING price)
+   asks: 101 -> [#1 qty=5]
+   taker: Buy #9 px=105 qty=5
+   trades = [{buy=9, sell=1, px=101, qty=5}]     <- 101, not 105
+
+ Example 3:  (sweep two levels, then rest the remainder)
+   asks: 101 -> [#1 qty=3],  102 -> [#2 qty=4]
+   taker: Buy #9 px=102 qty=10
+   trades = [{9,1,101,3}, {9,2,102,4}]
+   book after: asks empty, bids: 102 -> [#9 qty=3]
+
+ Example 4:  (FIFO inside a level + partial fill of a resting order)
+   asks: 101 -> [#1 qty=3, #2 qty=3]
+   taker: Buy #9 px=101 qty=4
+   trades = [{9,1,101,3}, {9,2,101,1}]
+   book after: asks: 101 -> [#2 qty=2]  (#2 keeps its place in the queue)
+
+ Example 5:  (no cross)
+   asks: 101 -> [#1 qty=5]
+   taker: Buy #9 px=100 qty=5
+   trades = []
+   book after: asks 101 -> [#1], bids 100 -> [#9]
+
+-----------------------------------------------------------------------------
+ Constraints:
+   - Each fill is O(1) apart from the level erase (O(log L) amortised).
+   - Never dereference begin() of an empty map or list.
+   - Don't erase an element and then use its iterator (iterator
+     invalidation!). Read what you need first, or use the iterator that
+     erase() returns.
+
+ Hints:
+   H1: Loop shape:
+         while (taker.qty > 0 && !opposite.empty()) {
+             auto lvlIt = opposite.begin();
+             if (!crosses) break;
+             Level& level = lvlIt->second;
+             Order& resting = level.front();
+             ...
+         }
+   H2: "crosses" without an if on Side: opposite.key_comp() is the map's
+       comparator (std::less for asks, std::greater for bids). The level
+       does NOT cross exactly when key_comp()(taker.price, levelPrice) is
+       true. Try it on paper for both sides. (A plain if/else on
+       taker.side is also fine.)
+   H3: std::min needs both arguments of the same type (Qty).
+   H4: Trade is {buyId, sellId, price, qty}.
+=============================================================================
+*/
+template <class OppositeSide>
+void MapOrderBook::matchAgainst(Order& taker, OppositeSide& opposite, std::vector<Trade>& trades) {
+    // ---------------- write your code below ----------------
+    const bool takerBuys = taker.side == Side::Buy;
+
+    while (taker.qty > 0 && !opposite.empty()) {
+        auto lvlIt = opposite.begin();  // best opposite level
+
+        // key_comp() is std::less for asks, std::greater for bids. It is
+        // true exactly when the level is worse than the taker's limit.
+        if (opposite.key_comp()(taker.price, lvlIt->first)) {
+            break;
+        }
+
+        Level& level = lvlIt->second;
+        Order& resting = level.front();  // oldest order = first to fill
+
+        const Qty fill = std::min(taker.qty, resting.qty);
+        trades.push_back({
+            .buyId = takerBuys ? taker.id : resting.id,
+            .sellId = takerBuys ? resting.id : taker.id,
+            .price = lvlIt->first,  // trade at the resting price
+            .qty = fill,
+        });
+        taker.qty -= fill;
+        resting.qty -= fill;
+
+        if (resting.qty == 0) {
+            index_.erase(resting.id);  // read the id before pop_front frees it
+            level.pop_front();
+        }
+        if (level.empty()) {
+            opposite.erase(lvlIt);
+        }
+    }
+    // ---------------- write your code above ----------------
 }
 
 std::optional<Price> MapOrderBook::bestBid() const {

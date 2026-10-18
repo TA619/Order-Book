@@ -36,6 +36,13 @@ public:
 private:
     using Level = std::list<Order>;
 
+    // Matches `taker` against the opposite side's map (asks_ for a buy,
+    // bids_ for a sell), appending fills to `trades` and reducing taker.qty.
+    // A template because bids_ and asks_ are different types; one body
+    // serves both sides. Defined in map_order_book.cpp (only used there).
+    template <class OppositeSide>
+    void matchAgainst(Order& taker, OppositeSide& opposite, std::vector<Trade>& trades);
+
     // Where an order lives, so cancel/modify can find it in O(1) without
     // searching. std::list iterators stay valid when other orders are
     // inserted or erased -- that is why we use list and not vector here.

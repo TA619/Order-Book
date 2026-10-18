@@ -6,6 +6,7 @@
 #include <functional>
 #include <list>
 #include <map>
+#include <ostream>
 #include <unordered_map>
 
 // Map-based book: one std::map per side, keyed by price, each level holding a
@@ -24,6 +25,9 @@ public:
     [[nodiscard]] std::size_t levelCount(Side s) const noexcept {
         return s == Side::Buy ? bids_.size() : asks_.size();
     }
+
+    // Prints the top `depth` levels of each side (see map_order_book.cpp).
+    void printBook(std::ostream& os, std::size_t depth = 5) const;
 
 private:
     using Level = std::list<Order>;

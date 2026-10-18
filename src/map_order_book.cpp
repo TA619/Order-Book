@@ -1,5 +1,9 @@
 #include "map_order_book.hpp"
 
+#include <algorithm>
+#include <cstddef>
+#include <iterator>
+
 /*
 =============================================================================
  Day 5 Problem: Add Limit Order (insert only)            Difficulty: Easy
@@ -91,17 +95,157 @@ std::vector<Trade> MapOrderBook::addLimit(Order o) {
     return {};
 }
 
-// ---------------------------------------------------------------------------
-// Day 6
-// ---------------------------------------------------------------------------
+/*
+=============================================================================
+ Day 6 Problem A: Best Bid / Best Ask                     Difficulty: Easy
+=============================================================================
+
+ Implement bestBid() and bestAsk():
+
+   - bestBid(): the HIGHEST price anyone is willing to buy at.
+   - bestAsk(): the LOWEST  price anyone is willing to sell at.
+   - If that side is empty, return std::nullopt.
+
+-----------------------------------------------------------------------------
+ Example 1:
+   (empty book)
+   bestBid() = nullopt, bestAsk() = nullopt
+
+ Example 2:
+   addLimit({id=1, Buy,  px=9900,  qty=10})
+   addLimit({id=2, Buy,  px=10000, qty=10})
+   addLimit({id=3, Sell, px=10200, qty=5})
+   addLimit({id=4, Sell, px=10100, qty=5})
+   bestBid() = 10000, bestAsk() = 10100      (spread = 100 ticks)
+
+ Example 3:  (one side only)
+   addLimit({id=1, Sell, px=10100, qty=5})
+   bestBid() = nullopt, bestAsk() = 10100
+
+-----------------------------------------------------------------------------
+ Constraints:
+   - O(1). No loops.
+   - Don't change the header.
+
+ Hints:
+   H1: Think about what bids_.begin() points to, given std::greater<>.
+   H2: Each map element is a std::pair<const Price, Level>. Which member is
+       the price?
+=============================================================================
+*/
 std::optional<Price> MapOrderBook::bestBid() const {
-    // TODO(Day 6): empty book -> std::nullopt, else the first key of bids_.
-    return std::nullopt;
+    // ---------------- write your code below ----------------
+    if (bids_.empty()) {
+        return std::nullopt;
+    }
+    return bids_.begin()->first;
+    // ---------------- write your code above ----------------
 }
 
 std::optional<Price> MapOrderBook::bestAsk() const {
-    // TODO(Day 6)
-    return std::nullopt;
+    // ---------------- write your code below ----------------
+    if (asks_.empty()) {
+        return std::nullopt;
+    }
+    return asks_.begin()->first;
+    // ---------------- write your code above ----------------
+}
+
+/*
+=============================================================================
+ Day 6 Problem B: Print the Book                        Difficulty: Medium
+=============================================================================
+
+ Implement printBook(os, depth): write the top `depth` levels of each side
+ to `os` in this EXACT format (the tests compare the string):
+
+   ASK <price> qty=<total qty at level> orders=<number of orders>
+   ...
+   ---
+   BID <price> qty=<total qty at level> orders=<number of orders>
+   ...
+
+ Rules:
+   - Show at most `depth` levels per side: the `depth` levels CLOSEST to the
+     spread (the best ones).
+   - Asks are printed from HIGH to LOW, so the best ask sits just above "---".
+   - Bids are printed from HIGH to LOW, so the best bid sits just below "---".
+   - Every line ends with '\n', including "---".
+   - qty = sum of o.qty over all orders in that level.
+
+ (This is how a trading screen ("ladder") shows a book: the spread is in the
+ middle, and prices go down the screen.)
+
+-----------------------------------------------------------------------------
+ Example 1:  (empty book)
+   ---
+
+ Example 2:
+   addLimit({id=1, Buy,  px=10000, qty=10})
+   addLimit({id=2, Buy,  px=10000, qty=20})
+   addLimit({id=3, Buy,  px=9900,  qty=30})
+   addLimit({id=4, Sell, px=10100, qty=5})
+   addLimit({id=5, Sell, px=10200, qty=7})
+   printBook(os) prints:
+     ASK 10200 qty=7 orders=1
+     ASK 10100 qty=5 orders=1
+     ---
+     BID 10000 qty=30 orders=2
+     BID 9900 qty=30 orders=1
+
+ Example 3:  (depth limit)
+   asks at 101, 102, 103, 104; bids at 99, 98, 97 (qty 1 each)
+   printBook(os, 2) prints:
+     ASK 102 qty=1 orders=1
+     ASK 101 qty=1 orders=1
+     ---
+     BID 99 qty=1 orders=1
+     BID 98 qty=1 orders=1
+   (103, 104 and 97 are NOT shown: they are further from the spread.)
+
+-----------------------------------------------------------------------------
+ Constraints:
+   - O(depth * orders per level). Don't copy the whole book.
+   - Don't change the header.
+
+ Hints:
+   H1: Bids are easy: walk from bids_.begin() and stop after `depth` levels
+       or at end().
+   H2: Asks are the tricky part. The levels you want are the FIRST `depth`
+       of asks_ (lowest prices), but you must print them in REVERSE.
+       Find the iterator one past the last level to show, then walk it
+       backwards to begin(). std::next / std::prev work on map iterators.
+   H3: Watch out when depth > asks_.size(), and when depth == 0.
+   H4: std::accumulate (<numeric>) or a simple for loop for the qty sum.
+=============================================================================
+*/
+void MapOrderBook::printBook(std::ostream& os, std::size_t depth) const {
+    // ---------------- write your code below ----------------
+    auto printLevel = [&os](const char* tag, Price px, const Level& level) {
+        Qty total = 0;
+        for (const Order& o : level) {
+            total += o.qty;
+        }
+        os << tag << ' ' << px << " qty=" << total << " orders=" << level.size() << '\n';
+    };
+
+    // Asks: the best `depth` levels are the first ones in asks_ (lowest
+    // prices), but they are printed high -> low, so walk them backwards from
+    // one past the last level shown.
+    const auto askCount = static_cast<std::ptrdiff_t>(std::min(depth, asks_.size()));
+    for (auto it = std::next(asks_.begin(), askCount); it != asks_.begin();) {
+        --it;
+        printLevel("ASK", it->first, it->second);
+    }
+
+    os << "---\n";
+
+    // Bids: begin() is already the best (highest) bid, so walk forwards.
+    std::size_t shown = 0;
+    for (auto it = bids_.begin(); it != bids_.end() && shown < depth; ++it, ++shown) {
+        printLevel("BID", it->first, it->second);
+    }
+    // ---------------- write your code above ----------------
 }
 
 // ---------------------------------------------------------------------------

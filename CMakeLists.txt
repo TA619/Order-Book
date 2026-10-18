@@ -15,10 +15,10 @@ function(set_project_warnings target)
     endif()
 endfunction()
 
-# Core order book library. Header-only for now; becomes a real library
-# once src/map_order_book.cpp exists (Day 5).
-add_library(orderbook INTERFACE)
-target_include_directories(orderbook INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+# Core order book library
+add_library(orderbook STATIC src/map_order_book.cpp)
+target_include_directories(orderbook PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+set_project_warnings(orderbook)
 
 # Demo executable
 add_executable(orderbook_app src/main.cpp)
@@ -32,6 +32,7 @@ find_package(GTest CONFIG REQUIRED)
 add_executable(tests
     tests/sanity_test.cpp
     tests/types_test.cpp
+    tests/order_book_tests.cpp
 )
 target_link_libraries(tests PRIVATE orderbook GTest::gtest_main)
 set_project_warnings(tests)

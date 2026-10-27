@@ -220,7 +220,7 @@ Map-based internals:
 ## 9. Progress checklist
 - [x] Week 1 — basic book
 - [x] Week 2 — matching engine
-- [ ] Week 3 — real data replay
+- [x] Week 3 — real data replay
 - [ ] Week 4 — benchmarks + README + GitHub
 - [ ] Add-on A — vector book
 - [ ] Add-on B — multithreading

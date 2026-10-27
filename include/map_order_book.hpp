@@ -20,6 +20,9 @@ public:
     std::vector<Trade> replace(OrderId id, Price newPrice, Qty newQty) override;
     [[nodiscard]] std::optional<Price> bestBid() const override;
     [[nodiscard]] std::optional<Price> bestAsk() const override;
+    [[nodiscard]] std::optional<Order> find(OrderId id) const override;
+    [[nodiscard]] std::optional<Order> frontOrder(Side s) const override;
+    [[nodiscard]] std::vector<LevelInfo> depth(Side s, std::size_t n) const override;
 
     // Debug / test helpers (not part of IOrderBook).
     [[nodiscard]] std::size_t orderCount() const noexcept { return index_.size(); }
@@ -30,9 +33,7 @@ public:
     // Prints the top `depth` levels of each side (see map_order_book.cpp).
     void printBook(std::ostream& os, std::size_t depth = 5) const;
 
-    // Copy of the orders resting at one price level, front (oldest) first.
-    // Empty if the level doesn't exist. For tests; not on the hot path.
-    [[nodiscard]] std::vector<Order> levelOrders(Side s, Price px) const;
+    [[nodiscard]] std::vector<Order> levelOrders(Side s, Price px) const override;
 
 private:
     using Level = std::list<Order>;
@@ -46,6 +47,9 @@ private:
 
     // Unlinks a resting order from its level (and drops the level if it is
     // now empty). Does not touch index_; the caller does that.
+    template <class SideMap>
+    static std::vector<LevelInfo> topLevels(const SideMap& side, std::size_t n);
+
     template <class SideMap>
     static void unlink(SideMap& side, Price px, Level::iterator it);
 

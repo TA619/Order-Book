@@ -62,6 +62,20 @@ void MapOrderBook::unlink(SideMap& side, Price px, Level::iterator it) {
     }
 }
 
+template <class SideMap>
+std::vector<LevelInfo> MapOrderBook::topLevels(const SideMap& side, std::size_t n) {
+    std::vector<LevelInfo> out;
+    out.reserve(std::min(n, side.size()));
+    for (auto it = side.begin(); it != side.end() && out.size() < n; ++it) {
+        Qty total = 0;
+        for (const Order& o : it->second) {
+            total += o.qty;
+        }
+        out.push_back({.price = it->first, .qty = total, .orders = it->second.size()});
+    }
+    return out;
+}
+
 // ---------------------------------------------------------------------------
 // Order entry
 // ---------------------------------------------------------------------------
@@ -219,6 +233,27 @@ std::optional<Price> MapOrderBook::bestAsk() const {
         return std::nullopt;
     }
     return asks_.begin()->first;
+}
+
+std::optional<Order> MapOrderBook::find(OrderId id) const {
+    auto found = index_.find(id);
+    if (found == index_.end()) {
+        return std::nullopt;
+    }
+    return *found->second.it;
+}
+
+std::optional<Order> MapOrderBook::frontOrder(Side s) const {
+    if (s == Side::Buy) {
+        return bids_.empty() ? std::nullopt : std::optional{bids_.begin()->second.front()};
+    }
+    return asks_.empty() ? std::nullopt : std::optional{asks_.begin()->second.front()};
+}
+
+// Both maps are sorted best-first, so the top n levels are the first n.
+// Cost: O(n * orders per level), since level qty is summed on the fly.
+std::vector<LevelInfo> MapOrderBook::depth(Side s, std::size_t n) const {
+    return s == Side::Buy ? topLevels(bids_, n) : topLevels(asks_, n);
 }
 
 // Ladder view, spread in the middle and prices descending down the screen:

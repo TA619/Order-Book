@@ -8,21 +8,21 @@
 using lobster::EventType;
 using lobster::Message;
 
-void Replayer::reduce(OrderId id, Qty by) {
-    const auto o = book_.find(id);
-    if (by >= o->qty) {
+// `have` = the order's current qty, which every caller already knows, so
+// this needs no extra index lookup.
+void Replayer::reduce(OrderId id, Qty have, Qty by) {
+    if (by >= have) {
         book_.cancel(id);
         suspect_.erase(id);
     } else {
-        book_.modify(id, o->qty - by);
+        book_.modify(id, have - by);
     }
 }
 
 // A delete's Size is the order's remaining size on the exchange. If ours
 // differs, an earlier reduceLevel() guessed the wrong order; the level total
 // was right, so move the difference onto the rest of the level.
-void Replayer::deleteOrder(const Message& m) {
-    const Qty ours = book_.find(m.id)->qty;
+void Replayer::deleteOrder(const Message& m, Qty ours) {
     book_.cancel(m.id);
     suspect_.erase(m.id);
     if (ours == m.size) {
@@ -50,7 +50,7 @@ Qty Replayer::reduceLevel(Side s, Price px, Qty by) {
     Qty left = by;
     auto take = [&](OrderId id, Qty qty) {
         const Qty cut = std::min(left, qty);
-        reduce(id, cut);
+        reduce(id, qty, cut);
         left -= cut;
     };
 
@@ -84,8 +84,7 @@ OrderId Replayer::syntheticAt(Side s, Price px) const {
     return it == synthetic_.end() ? 0 : it->second;
 }
 
-void Replayer::execute(const Message& m) {
-    const Qty ours = book_.find(m.id)->qty;
+void Replayer::execute(const Message& m, Qty ours) {
     const Qty fill = std::min(m.size, ours);
 
     // Only a fill of the order at the very front of the queue can be
@@ -93,7 +92,7 @@ void Replayer::execute(const Message& m) {
     const auto front = book_.frontOrder(m.side);
     if (front->id != m.id) {
         ++(isSynthetic(front->id) ? stats_.seedReorders : stats_.priorityMismatches);
-        reduce(m.id, fill);
+        reduce(m.id, ours, fill);
     } else {
         const std::vector<Trade> trades = book_.addMarket(opposite(m.side), fill, nextTaker_++);
         stats_.engineTrades += trades.size();
@@ -101,9 +100,8 @@ void Replayer::execute(const Message& m) {
     coverShortfall(m, ours);
 }
 
-void Replayer::partialCancel(const Message& m) {
-    const Qty ours = book_.find(m.id)->qty;
-    reduce(m.id, std::min(m.size, ours));
+void Replayer::partialCancel(const Message& m, Qty ours) {
+    reduce(m.id, ours, std::min(m.size, ours));
     coverShortfall(m, ours);
 }
 
@@ -141,18 +139,19 @@ void Replayer::apply(const Message& m) {
                 ++(m.type == EventType::Cancel ? stats_.cancels : stats_.deletes);
             }
 
-            if (!book_.find(m.id)) {
+            const auto known = book_.find(m.id);  // the one index lookup
+            if (!known) {
                 // An order we never saw: resting before 9:30 or submitted out
                 // of view. Its quantity is part of the level's total (reconcile
                 // made sure of that), so take it from the level.
                 ++(reduceLevel(m.side, m.price, m.size) > 0 ? stats_.unknownOrders
                                                             : stats_.droppedMessages);
             } else if (m.type == EventType::Execute) {
-                execute(m);
+                execute(m, known->qty);
             } else if (m.type == EventType::Delete) {
-                deleteOrder(m);
+                deleteOrder(m, known->qty);
             } else {
-                partialCancel(m);
+                partialCancel(m, known->qty);
             }
             return;
         }

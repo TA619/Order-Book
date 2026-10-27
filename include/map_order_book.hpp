@@ -6,13 +6,28 @@
 #include <functional>
 #include <list>
 #include <map>
+#include <memory_resource>
 #include <ostream>
 #include <unordered_map>
 
 // Map-based book: one std::map per side, keyed by price, each level holding a
 // FIFO std::list of orders (front = oldest = first to fill).
+//
+// All node-based containers allocate from one pool (pool_), not the global
+// heap: a freed list/map/hash node goes on a per-size free list and the next
+// insert of the same size reuses it, with no locking. That removes most of
+// the malloc/free cost from the hot path (see the README's benchmark table).
+// The pool owns the memory, so the book can't be copied or moved.
 class MapOrderBook final : public IOrderBook {
 public:
+    MapOrderBook() = default;
+
+    // Pre-sizes the order index for this many resting orders, so it never
+    // rehashes (reallocates and moves every entry) while the book grows.
+    explicit MapOrderBook(std::size_t expectedOrders) { index_.reserve(expectedOrders); }
+    MapOrderBook(const MapOrderBook&) = delete;
+    MapOrderBook& operator=(const MapOrderBook&) = delete;
+
     std::vector<Trade> addLimit(Order o) override;
     std::vector<Trade> addMarket(Side s, Qty q, OrderId id) override;
     bool cancel(OrderId id) override;
@@ -36,7 +51,7 @@ public:
     [[nodiscard]] std::vector<Order> levelOrders(Side s, Price px) const override;
 
 private:
-    using Level = std::list<Order>;
+    using Level = std::pmr::list<Order>;
 
     // Matches `taker` against the opposite side's map (asks_ for a buy,
     // bids_ for a sell), appending fills to `trades` and reducing taker.qty.
@@ -62,12 +77,17 @@ private:
         Level::iterator it;
     };
 
-    // Bids: highest price first (std::greater), so begin() is the best bid.
-    std::map<Price, Level, std::greater<>> bids_;
-    // Asks: lowest price first (default std::less), so begin() is the best ask.
-    std::map<Price, Level> asks_;
+    // Declared first: members are destroyed in reverse order, so the pool
+    // outlives every container that allocates from it.
+    std::pmr::unsynchronized_pool_resource pool_;
 
-    std::unordered_map<OrderId, Locator> index_;
+    // Bids: highest price first (std::greater), so begin() is the best bid.
+    // pmr containers pass the pool down to the Level lists they create.
+    std::pmr::map<Price, Level, std::greater<>> bids_{&pool_};
+    // Asks: lowest price first (default std::less), so begin() is the best ask.
+    std::pmr::map<Price, Level> asks_{&pool_};
+
+    std::pmr::unordered_map<OrderId, Locator> index_{&pool_};
 
     // Time priority: every accepted order gets the next sequence number.
     Timestamp nextTs_ = 0;

@@ -84,14 +84,14 @@ private:
 
     [[nodiscard]] OrderId syntheticAt(Side s, Price px) const;  // 0 if none
 
-    void reduce(OrderId id, Qty by);  // partial or full cancel of one order
+    void reduce(OrderId id, Qty have, Qty by);  // partial or full cancel of one order
     // Removes `by` shares from a level whose orders we can't tell apart.
     // Returns how much was actually removed.
     Qty reduceLevel(Side s, Price px, Qty by);
     void addSynthetic(Side s, Price px, Qty qty);
-    void deleteOrder(const lobster::Message& m);
-    void execute(const lobster::Message& m);
-    void partialCancel(const lobster::Message& m);
+    void deleteOrder(const lobster::Message& m, Qty ours);
+    void execute(const lobster::Message& m, Qty ours);
+    void partialCancel(const lobster::Message& m, Qty ours);
     void coverShortfall(const lobster::Message& m, Qty ours);
 
     // Makes our level at (s, px) hold exactly `want` shares.

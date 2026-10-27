@@ -34,6 +34,19 @@ add_executable(replay src/replay_main.cpp)
 target_link_libraries(replay PRIVATE orderbook)
 set_project_warnings(replay)
 
+# Benchmarks (Google Benchmark). OB_DATA_DIR lets the replay benchmark find
+# the LOBSTER files without depending on the working directory.
+find_package(benchmark CONFIG REQUIRED)
+add_executable(bench bench/book_bench.cpp)
+target_link_libraries(bench PRIVATE orderbook benchmark::benchmark benchmark::benchmark_main)
+target_compile_definitions(bench PRIVATE OB_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+set_project_warnings(bench)
+
+# Per-event latency percentiles: latency <message.csv> <orderbook.csv> [--csv out.csv]
+add_executable(latency bench/latency_main.cpp)
+target_link_libraries(latency PRIVATE orderbook)
+set_project_warnings(latency)
+
 # Tests
 enable_testing()
 find_package(GTest CONFIG REQUIRED)

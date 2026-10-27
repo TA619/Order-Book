@@ -17,6 +17,7 @@ public:
     std::vector<Trade> addMarket(Side s, Qty q, OrderId id) override;
     bool cancel(OrderId id) override;
     bool modify(OrderId id, Qty newQty) override;
+    std::vector<Trade> replace(OrderId id, Price newPrice, Qty newQty) override;
     [[nodiscard]] std::optional<Price> bestBid() const override;
     [[nodiscard]] std::optional<Price> bestAsk() const override;
 
@@ -42,6 +43,11 @@ private:
     // serves both sides. Defined in map_order_book.cpp (only used there).
     template <class OppositeSide>
     void matchAgainst(Order& taker, OppositeSide& opposite, std::vector<Trade>& trades);
+
+    // Unlinks a resting order from its level (and drops the level if it is
+    // now empty). Does not touch index_; the caller does that.
+    template <class SideMap>
+    static void unlink(SideMap& side, Price px, Level::iterator it);
 
     // Where an order lives, so cancel/modify can find it in O(1) without
     // searching. std::list iterators stay valid when other orders are
